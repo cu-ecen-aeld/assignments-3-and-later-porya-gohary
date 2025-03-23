@@ -17,7 +17,7 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
+    return system(cmd) == 0;
 }
 
 /**
@@ -58,10 +58,31 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    pid_t pid = fork();
+    if(pid == 0)
+    {
+        execv(command[0], command);
+        exit(1);
+    }
+    else if(pid == -1)
+    {
+        return false;
+    }
 
     va_end(args);
 
-    return true;
+    int status;
+
+    if (waitpid(pid, &status, 0) == -1)
+    {
+        return false;
+    }
+    else if (WIFEXITED(status))
+    {
+        return WEXITSTATUS(status) == 0;
+    }
+    
+    return false;
 }
 
 /**
@@ -82,7 +103,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    // command[count] = command[count];
 
 
 /*
@@ -92,8 +113,42 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+
+    if(fd == -1)
+    {
+        return false; 
+    }
+
+    pid_t pid = fork();
+    if(pid == 0)
+    {
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+        execv(command[0], command);
+        exit(1);
+    }
+    else if(pid == -1)
+    {
+        return false;
+    }
+
+    close(fd);  
+
+
 
     va_end(args);
+    
 
-    return true;
+    int status;
+    if(waitpid(pid, &status, 0) == -1)
+    {
+        return false;
+    }
+    else if(WIFEXITED(status))
+    {
+        return WEXITSTATUS(status) == 0;
+    }
+
+    return false;
 }
